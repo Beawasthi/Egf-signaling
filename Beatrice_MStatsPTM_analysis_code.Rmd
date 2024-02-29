@@ -1,0 +1,593 @@
+---
+title: "Beatrice_analysis"
+author: "Ian Smith"
+date: "2023-04-30"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(tidyverse)
+library(MSstatsPTM)
+library(MSstats)
+library(MSstatsTMT)
+library(MSstatsConvert)
+
+
+anova_test<-function(data){
+  df<-data.frame(data)
+  test<-aov(Abundance ~ Condition, data= df)
+  return(summary(test)[[1]][["Pr(>F)"]][1])
+}
+adjusted_anova_test<-function(data){
+  df<-data.frame(data)
+  test<-tryCatch(
+    {aov(Abundance ~ Condition, data= df)
+    },
+    error = function(e){
+      1
+    }
+  )
+  result <- tryCatch(
+    {summary(test)[[1]][["Pr(>F)"]][1]
+    },
+    error = function(e){
+      1
+    }
+  )
+  print(result)
+  return(result)
+}
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+### New search match
+
+```{r}
+# searchmatch<-read.csv("C:/Harper/Side_analysis/Beatrice/final_data/searchname_match.csv")%>%
+#   gather("sample_type","SearchName",1:10)%>%
+#   filter(!is.na(SearchName))%>%
+#   group_by(sample_type)%>%
+#   mutate(Fraction = rank(SearchName))
+# 
+# phospho_df_all<-read.csv("C:/Harper/Side_analysis/Beatrice/final_data/beatrice_all_phosphoproteome_data.csv")%>%
+#   left_join(.,searchmatch,by="SearchName",relationship = "many-to-many")
+# 
+# write.csv(phospho_df_all%>%distinct(SrchName,SearchName,sample_type,Fraction)%>%arrange(sample_type,Fraction),"C:/Harper/Side_analysis/Beatrice/final_data/file_design_phos_info.csv")
+# 
+# proteome_df_all<-read.csv("C:/Harper/Side_analysis/Beatrice/final_data/beatrice_all_proteome_data.csv")%>%
+#   rename(SearchName  = SearchMatch)%>%
+#   left_join(.,searchmatch,by="SearchName",relationship = "many-to-many")
+# 
+# write.csv(proteome_df_all%>%distinct(SrchName,SearchName,sample_type,Fraction)%>%arrange(sample_type,Fraction),"C:/Harper/Side_analysis/Beatrice/final_data/file_design_prot_info.csv")
+
+# prot<- read.csv("C:/Harper/Side_analysis/Beatrice/brain_proteome.csv")
+# exp_design<-read.csv("C:/Harper/Side_analysis/Beatrice/beatrice_protein_exp_design_msstats_v2.csv")
+# exp_design_frac<-read.csv("C:/Harper/Side_analysis/Beatrice/beatrice_protein_file_design.csv")
+# 
+# 
+# phos<-read.csv("C:/Harper/Side_analysis/Beatrice/brain_phosphoproteome.csv")
+# exp_design_phos<-read.csv("C:/Harper/Side_analysis/Beatrice/beatrice_phospho_exp_design_msstats_v2.csv")
+# exp_design_frac_phos<-read.csv("C:/Harper/Side_analysis/Beatrice/beatrice_phospho_file_design.csv")
+```
+
+##
+
+
+```{r}
+###Choose path where files are located
+path="/Users/beatrice/Desktop/2023_03_12_Haigis_lab/Coding/EGF_and_MEKi_treatment_final/final_MSstats_files/"
+### choose between: "lung" , "liver" , "kidney" , "heart" , "brain" 
+tissue<-"heart"
+
+prot_all<- read.csv(paste(path,"beatrice_all_proteome_data.csv",sep=""))
+exp_design<-read.csv(paste(path,"beatrice_proteome_exp_design_",tissue,".csv",sep=""))
+exp_design_frac<-read.csv(paste(path,"beatrice_proteome_file_design_",tissue,".csv",sep=""))
+
+prot<-prot_all%>%
+  dplyr::filter(SrchName %in% exp_design_frac$Run)
+
+phos_all<-read.csv(paste(path,"beatrice_all_phosphoproteome_data.csv",sep=""))
+exp_design_phos<-read.csv(paste(path,"beatrice_phospho_exp_design_",tissue,".csv",sep=""))
+exp_design_frac_phos<-read.csv(paste(path,"beatrice_phospho_file_design_",tissue,".csv",sep=""))
+
+phos<-phos_all%>%
+  dplyr::filter(SrchName %in% exp_design_frac_phos$Run)
+```
+
+
+
+
+## protein data msstats input generation
+
+```{r}
+
+annotation_file<-dplyr::full_join(exp_design,exp_design_frac,by="Mixture")%>%
+  dplyr::select(Run,Fraction,TechRepMixture,Channel,Condition, Replicate,Mixture,priority)%>%
+  dplyr::mutate(Replicate = paste(Condition, Replicate,sep="_"))%>%
+  dplyr::rename(BioReplicate = Replicate)
+
+df_slim_1<-prot%>%
+  dplyr::select(Trimmed.Peptide,z,SrchName,Protein.ID,PA.Gene.Symbol,PA.Annotation,Isolation.Specificity,Sum.Sn,
+                X126.Raw.Intensity,X127n.Raw.Intensity,X127c.Raw.Intensity,X128n.Raw.Intensity,
+                X128c.Raw.Intensity,X129n.Raw.Intensity,X129c.Raw.Intensity,X130n.Raw.Intensity,
+                X130c.Raw.Intensity,X131n.Raw.Intensity,X131c.Raw.Intensity,X132n.Raw.Intensity,
+                X132c.Raw.Intensity,X133n.Raw.Intensity,X133c.Raw.Intensity,X134n.Raw.Intensity,
+                X134c.Raw.Intensity,X135n.Raw.Intensity,ScanF)%>%
+  dplyr::rename(Abundance..126 = X126.Raw.Intensity,
+                Abundance..127N = X127n.Raw.Intensity,
+                Abundance..127C = X127c.Raw.Intensity,
+                Abundance..128N = X128n.Raw.Intensity,
+                Abundance..128C = X128c.Raw.Intensity,
+                Abundance..129N = X129n.Raw.Intensity,
+                Abundance..129C = X129c.Raw.Intensity,
+                Abundance..130N = X130n.Raw.Intensity,
+                Abundance..130C = X130c.Raw.Intensity,
+                Abundance..131N = X131n.Raw.Intensity,
+                Abundance..131C = X131c.Raw.Intensity,
+                Abundance..132N = X132n.Raw.Intensity,
+                Abundance..132C = X132c.Raw.Intensity,
+                Abundance..133N = X133n.Raw.Intensity,
+                Abundance..133C = X133c.Raw.Intensity,
+                Abundance..134N = X134n.Raw.Intensity,
+                Abundance..134C = X134c.Raw.Intensity,
+                Abundance..135N = X135n.Raw.Intensity,
+                Reference = Protein.ID,
+                Gene.Symbol = PA.Gene.Symbol,
+                Annotation = PA.Annotation)%>%
+  ##ADD PSM
+  #dplyr::mutate(PSM=paste(Peptide,z,sep="_"))%>%
+  dplyr::filter(Sum.Sn > 200 , Isolation.Specificity > 0.5)%>%
+  dplyr::filter(str_detect(Reference,"contaminant")==F)%>%
+  dplyr::distinct()%>%
+  dplyr::group_by(Reference,Gene.Symbol,Annotation)%>%
+  dplyr::mutate(numPep = n())%>%
+  #Number peptide filter here
+  dplyr::filter(numPep > 0)%>%
+  dplyr::ungroup()%>%
+  dplyr::select(-Sum.Sn,-Isolation.Specificity,-numPep)%>%
+  tidyr::unite("Protein.Accessions",Reference,Gene.Symbol,Annotation, sep="__X__")%>%
+  dplyr::filter(str_detect(Protein.Accessions,"\\#\\#")==F)%>%
+  #dplyr::mutate(Protein.Accessions =Gene.Symbol)%>%
+  dplyr::rename(Annotated.Sequence = Trimmed.Peptide,
+                Charge = z,
+                Run = SrchName)
+
+
+
+###new code for MS stats
+
+df_slim_pep3<-df_slim_1%>%
+  dplyr::left_join(exp_design_frac,.,by="Run")%>%
+  dplyr::ungroup()%>%
+  dplyr::mutate(PSM = paste(Annotated.Sequence, Charge,sep="_"))%>%
+  tidyr::gather("Channel","Intensity",8:25)%>%
+  dplyr::left_join(.,annotation_file,by=c("Run","Fraction","Channel","TechRepMixture","Mixture"))%>%
+  dplyr::filter(Condition != "Empty")%>%
+  # dplyr::filter(Intensity >1)%>%
+  # dplyr::mutate(Intensity= if_else(Intensity < 1, 0, Intensity))%>%
+  dplyr::mutate(Channel = str_replace(Channel, "Abundance..",""))%>%
+  dplyr::rename(ProteinName = Protein.Accessions,
+                PeptideSequence = Annotated.Sequence)%>%
+  dplyr::group_by(ProteinName,PeptideSequence,Charge,PSM,
+                  Mixture,TechRepMixture,Channel,
+                  BioReplicate,Condition,Fraction,priority,Run)%>%
+  dplyr::summarise(Intensity=sum(Intensity,na.rm=TRUE),
+                   RetentionTime=15)
+  
+df_slim_pep3$Condition<-reorder(df_slim_pep3$Condition,df_slim_pep3$priority,min)
+df_slim_pep3$BioReplicate<-reorder(df_slim_pep3$BioReplicate,df_slim_pep3$priority,min)
+  
+df_slim_pep3<-df_slim_pep3%>%
+  dplyr::ungroup()%>%
+  dplyr::select(-priority)
+
+MSstatsContrastMatrix.list_FIX = function(contrasts, Conditions, labels) {
+  num_Conditions = length(Conditions)
+  contrast_matrix = matrix(0, nrow = length(contrasts),
+                           ncol = num_Conditions)
+  for (contrast_id in seq_along(contrasts)) {
+    contrast = contrasts[[contrast_id]]
+    contrast_vector = rep(0, num_Conditions)
+    positive = Conditions %in% contrast[[2]]
+    negative = Conditions %in% contrast[[1]]
+    contrast_vector[positive] = 1 / sum(positive)
+    contrast_vector[negative] = -1 / sum(negative)
+    contrast_matrix[contrast_id, ] = contrast_vector
+  }
+  
+  row.names(contrast_matrix) = labels
+
+  colnames(contrast_matrix) = Conditions
+  contrast_matrix
+}
+
+  
+
+
+### determine contrasts
+
+expand.grid.unique <- function(x, y, include.equals=FALSE)
+{
+  x <- unique(x)
+  y <- unique(y)
+  g <- function(i)
+  {
+    z <- setdiff(y, x[seq_len(i-include.equals)])
+    if(length(z)) cbind(x[i], z, deparse.level=0)
+  }
+  do.call(rbind, lapply(seq_along(x), g))
+}
+
+exp_design2<-exp_design%>%
+  filter(Condition != "Empty")
+
+factor_level_list<-reorder(exp_design2$Condition,exp_design2$priority,min)
+
+
+contrast_combinations = combn(levels(factor_level_list), 2)
+num_combinations = ncol(contrast_combinations)
+contrasts_list = lapply(seq_len(num_combinations),
+                        function(x) list(contrast_combinations[1, x],
+                                         contrast_combinations[2, x]))
+ll<-data.frame(expand.grid.unique(levels(factor_level_list),levels(factor_level_list)))
+
+colnames(ll)<-c("con1","con2")
+
+ll<-ll%>%
+  dplyr::mutate(comparison_val = paste(con2,con1,sep = "-"))
+
+comparisons<- MSstatsContrastMatrix.list_FIX(contrasts_list, levels(factor_level_list), labels =ll$comparison_val )
+print(comparisons)
+
+
+# write.csv(df_slim_pep3,"C:/Harper/Side_analysis/Beatrice/brain_proteome_shiny_input.csv",row.names = F)
+
+```
+
+
+## Phospho data msstats input generation
+
+```{r}
+
+annotation_file_phos<-dplyr::full_join(exp_design_phos,exp_design_frac_phos,by="Mixture")%>%
+  dplyr::select(Run,Fraction,TechRepMixture,Channel,Condition, Replicate,Mixture,priority)%>%
+  dplyr::mutate(Replicate = paste(Condition, Replicate,sep="_"))%>%
+  dplyr::rename(BioReplicate = Replicate)
+
+df_slim_1_phos<-phos%>%
+  ### remove non-phosphopeptides
+  filter(ModScore.Peptide != "")%>%
+  mutate(site= paste("S",Site.1.Position,"S",Site.2.Position,"S",Site.3.Position,sep=""),
+         site=str_remove_all(site, "S0"))%>%
+  dplyr::select(ModScore.Peptide,z,SrchName,Protein.ID,PA.Gene.Symbol,PA.Annotation,site,Isolation.Specificity,Sum.Sn,
+                X126.Raw.Intensity,X127n.Raw.Intensity,X127c.Raw.Intensity,X128n.Raw.Intensity,
+                X128c.Raw.Intensity,X129n.Raw.Intensity,X129c.Raw.Intensity,X130n.Raw.Intensity,
+                X130c.Raw.Intensity,X131n.Raw.Intensity,X131c.Raw.Intensity,X132n.Raw.Intensity,
+                X132c.Raw.Intensity,X133n.Raw.Intensity,X133c.Raw.Intensity,X134n.Raw.Intensity,
+                X134c.Raw.Intensity,X135n.Raw.Intensity,ScanF)%>%
+  dplyr::rename(Abundance..126 = X126.Raw.Intensity,
+                Abundance..127N = X127n.Raw.Intensity,
+                Abundance..127C = X127c.Raw.Intensity,
+                Abundance..128N = X128n.Raw.Intensity,
+                Abundance..128C = X128c.Raw.Intensity,
+                Abundance..129N = X129n.Raw.Intensity,
+                Abundance..129C = X129c.Raw.Intensity,
+                Abundance..130N = X130n.Raw.Intensity,
+                Abundance..130C = X130c.Raw.Intensity,
+                Abundance..131N = X131n.Raw.Intensity,
+                Abundance..131C = X131c.Raw.Intensity,
+                Abundance..132N = X132n.Raw.Intensity,
+                Abundance..132C = X132c.Raw.Intensity,
+                Abundance..133N = X133n.Raw.Intensity,
+                Abundance..133C = X133c.Raw.Intensity,
+                Abundance..134N = X134n.Raw.Intensity,
+                Abundance..134C = X134c.Raw.Intensity,
+                Abundance..135N = X135n.Raw.Intensity,
+                Reference = Protein.ID,
+                Gene.Symbol = PA.Gene.Symbol,
+                Annotation = PA.Annotation)%>%
+  ##ADD PSM
+  #dplyr::mutate(PSM=paste(Peptide,z,sep="_"))%>%
+  dplyr::filter(Sum.Sn > 200 , Isolation.Specificity > 0.5)%>%
+  dplyr::filter(str_detect(Reference,"contaminant")==F)%>%
+  dplyr::distinct()%>%
+  dplyr::group_by(Reference,Gene.Symbol,Annotation,ModScore.Peptide,site)%>%
+  dplyr::mutate(numPep = n())%>%
+  #Number peptide filter here
+  dplyr::filter(numPep > 0)%>%
+  dplyr::ungroup()%>%
+  dplyr::mutate(Trimmed.Peptide2=ModScore.Peptide)%>%
+  dplyr::select(-Sum.Sn,-Isolation.Specificity,-numPep)%>%
+  tidyr::unite("Protein.Accessions2",Reference,Gene.Symbol,Annotation, sep="__X__")%>%
+  dplyr::mutate(site2=site)%>%
+  tidyr::unite("Protein.Accessions",Protein.Accessions2,site, sep="_")%>%
+  dplyr::filter(str_detect(Protein.Accessions,"\\#\\#")==F)%>%
+  dplyr::mutate(Trimmed.Peptide2 = str_replace_all(Trimmed.Peptide2,"\\#","X"),
+                Trimmed.Peptide2 = str_replace_all(Trimmed.Peptide2,"\\*","Z"),
+                Trimmed.Peptide2 = str_replace_all(Trimmed.Peptide2,"\\@","B"))%>%
+  dplyr::mutate(Trimmed.Peptide2 = paste(site2,"ZZ",  Trimmed.Peptide2,sep=""),
+                Trimmed.Peptide2 = str_remove_all(Trimmed.Peptide2,"_"))%>%
+  dplyr::select(-site2)%>%
+  #dplyr::mutate(Protein.Accessions =Gene.Symbol)%>%
+  dplyr::rename(Annotated.Sequence = Trimmed.Peptide2,
+                Charge = z,
+                Run = SrchName)
+
+
+###new code for MS stats
+
+df_slim_pep3_phos<-df_slim_1_phos%>%
+  dplyr::left_join(exp_design_frac_phos,.,by="Run")%>%
+  dplyr::ungroup()%>%
+  dplyr::mutate(PSM = paste(Annotated.Sequence, Charge,sep="_"))%>%
+  tidyr::gather("Channel","Intensity",8:25)%>%
+  dplyr::left_join(.,annotation_file_phos,by=c("Run","Fraction","Channel","TechRepMixture","Mixture"))%>%
+  dplyr::filter(Condition != "Empty")%>%
+  # dplyr::mutate(Intensity= if_else(Intensity < 1, 0, Intensity))%>%
+  dplyr::mutate(Channel = str_replace(Channel, "Abundance..",""))%>%
+  dplyr::rename(ProteinName = Protein.Accessions,
+                PeptideSequence = Annotated.Sequence)%>%
+  dplyr::group_by(ProteinName,PeptideSequence,Charge,PSM,
+                  Mixture,TechRepMixture,Channel,
+                  BioReplicate,Condition,Fraction,priority,Run)%>%
+  dplyr::summarise(Intensity=sum(Intensity,na.rm=TRUE),
+                   RetentionTime=15)
+  
+df_slim_pep3_phos$Condition<-reorder(df_slim_pep3_phos$Condition,df_slim_pep3_phos$priority,min)
+df_slim_pep3_phos$BioReplicate<-reorder(df_slim_pep3_phos$BioReplicate,df_slim_pep3_phos$priority,min)
+  
+df_slim_pep3_phos<-df_slim_pep3_phos%>%
+  dplyr::ungroup()%>%
+  dplyr::select(-priority)%>%
+  dplyr::distinct()
+
+# write.csv(df_slim_pep3_phos,"C:/Harper/Side_analysis/Beatrice/brain_phospho_shiny_input.csv",row.names = F)
+
+```
+
+## Perform MSstats
+
+```{r}
+
+### combine data for MSstatsPTM
+data <- list("PTM"=df_slim_pep3_phos,"PROTEIN"=df_slim_pep3)
+# data <- list("PTM"=df_slim_pep3_phos)
+### Perform protein and phosphoisoform normalization
+summarized = MSstatsPTM::dataSummarizationPTM_TMT(data, 
+                     method = 'msstats',				
+                     global_norm.PTM = TRUE,				 
+                     reference_norm.PTM = TRUE,				
+                     remove_norm_channel  = TRUE,				
+                     remove_empty_channel = TRUE, 				 
+                     MBimpute.PTM = FALSE, 				
+                     maxQuantileforCensored = 0.999)
+
+
+# Model-based comparison
+model = MSstatsPTM::groupComparisonPTM(summarized, 'TMT', 				   
+                  contrast.matrix = comparisons)
+
+
+### phospho results
+PTM_results<-model$PTM.Model%>%
+    dplyr::select(-issue,
+                  -SE,
+                  -DF)%>%
+    dplyr::rename(q.val = adj.pvalue,
+                  p.val = pvalue,
+                  ProtID = Protein)%>%
+    dplyr::mutate(sig = dplyr::if_else(q.val < 0.05,if_else(abs(log2FC)>log2(1.5), if_else(log2FC > 0, "up","down"),"n.s."),"n.s."))%>%
+    dplyr::group_by(ProtID)%>%
+    tidyr::pivot_wider(names_from = Label,
+                       values_from = c(log2FC,p.val,q.val,sig),
+                       names_sep = "_")
+
+
+
+## proteome results
+Protein_results<-model$PROTEIN.Model%>%
+    dplyr::select(-issue,
+                  -SE,
+                  -DF)%>%
+    dplyr::rename(q.val = adj.pvalue,
+                  p.val = pvalue,
+                  ProtID = Protein)%>%
+    dplyr::mutate(sig = dplyr::if_else(q.val < 0.05,if_else(abs(log2FC)>log2(1.5), if_else(log2FC > 0, "up","down"),"n.s."),"n.s."))%>%
+    dplyr::group_by(ProtID)%>%
+    tidyr::pivot_wider(names_from = Label,
+                       values_from = c(log2FC,p.val,q.val,sig),
+                       names_sep = "_")
+
+### adjusted ptm results (Phospho-Protein)
+PTMadjusted_results<-model$ADJUSTED.Model%>%
+    dplyr::select(-SE,
+                  -DF)%>%
+    dplyr::rename(q.val = adj.pvalue,
+                  p.val = pvalue,
+                  ProtID = Protein)%>%
+    dplyr::mutate(sig = dplyr::if_else(q.val < 0.05,if_else(abs(log2FC)>log2(1.5), if_else(log2FC > 0, "up","down"),"n.s."),"n.s."))%>%
+    dplyr::group_by(ProtID,GlobalProtein,Adjusted)%>%
+    tidyr::pivot_wider(names_from = Label,
+                       values_from = c(log2FC,p.val,q.val,sig,Tvalue),
+                       names_sep = "_")%>%
+  tidyr::separate(ProtID,into=c("Reference", "Gene.Symbol","Annotation"),sep="__X__")%>%
+  tidyr::separate(Annotation, into=c("Annotation","PhosphoSite"),sep="_")%>%
+  tidyr::separate(GlobalProtein,into=c("Reference_PROTEIN", "Gene.Symbol_PROTEIN","Annotation_PROTEIN"),sep="__X__")
+
+PTMadjusted_results$Gene.Symbol_PROTEIN[is.na(PTMadjusted_results$Gene.Symbol_PROTEIN)] <- "missing"
+PTMadjusted_results$Annotation_PROTEIN[is.na(PTMadjusted_results$Annotation_PROTEIN)] <- "missing"
+
+
+write.csv(PTMadjusted_results, paste(path,"Phospho_ProteinAdjusted_StatResults_",tissue,".csv"))
+```
+
+
+### Generate final protein tables
+
+
+```{r}
+exp_design2<-exp_design%>%
+    dplyr::filter(Condition != "Empty")%>%
+    dplyr::mutate(BioReplicate = paste(Condition,Replicate,sep="_"))%>%
+    dplyr::select(BioReplicate, priority)
+  
+prot_norm_data_reps_tidy<-summarized$PROTEIN$ProteinLevelData%>%
+  dplyr::rename(ProtID = Protein)%>%
+  dplyr::ungroup()%>%
+  dplyr::left_join(.,exp_design2, by="BioReplicate")
+  
+prot_norm_data_reps_tidy$BioReplicate<-reorder(prot_norm_data_reps_tidy$BioReplicate,prot_norm_data_reps_tidy$priority,min)
+prot_norm_data_reps_tidy$Condition<-reorder(prot_norm_data_reps_tidy$Condition,prot_norm_data_reps_tidy$priority,min)
+  
+prot_norm_data_reps_tidy<-prot_norm_data_reps_tidy%>% 
+  dplyr::ungroup()%>%
+  dplyr::select(-priority)%>%
+  dplyr::select(ProtID,  Condition,BioReplicate, Abundance)%>%
+  dplyr::group_by(ProtID,Condition,  BioReplicate)%>%
+  dplyr::summarise(Abundance = mean(Abundance,na.rm=TRUE))%>%
+  dplyr::mutate(Abundance = replace_na(Abundance, 0))
+
+
+prot_norm_data_reps<-prot_norm_data_reps_tidy%>%
+    dplyr::ungroup()%>%
+    dplyr::group_by(ProtID,  BioReplicate, Abundance)%>%
+    dplyr::select(-Condition)%>%
+    tidyr::spread(BioReplicate, Abundance)%>%
+    dplyr::ungroup()
+prot_norm_data_reps[is.na(prot_norm_data_reps)] <- 0
+
+
+prot_norm_data_cond<-prot_norm_data_reps_tidy%>%
+    # dplyr::rename(ProtID = Protein)%>%
+    dplyr::ungroup()%>%
+    dplyr::select(ProtID,  BioReplicate, Condition, Abundance)%>%
+    dplyr::filter(Abundance>-1)%>%
+    dplyr::group_by(ProtID,Condition,  BioReplicate)%>%
+    dplyr::summarise(Abundance = mean(Abundance))%>%
+    dplyr::ungroup()%>%
+    dplyr::group_by(ProtID,Condition)%>%
+    dplyr::summarise(Abundance= mean(Abundance))%>%
+    tidyr::spread(Condition, Abundance)%>%
+    dplyr::ungroup()
+  
+prot_norm_data_cond[is.na(prot_norm_data_cond)] <- 0
+
+prot_norm_data_reps_tidy_anova<-prot_norm_data_reps_tidy%>%
+  dplyr::group_by(ProtID)%>%
+  tidyr::nest()%>%
+ # dplyr::mutate(p.val_anova = data %>% map_dbl(adjusted_anova_test)) # for liver
+  dplyr::mutate(p.val_anova = data %>% map_dbl(anova_test))
+
+prot_norm_data_reps_tidy_anova$q.val_anova <- p.adjust(prot_norm_data_reps_tidy_anova$p.val_anova, method="fdr")
+
+prot_norm_data_reps_tidy_anova<-prot_norm_data_reps_tidy_anova%>%
+  dplyr::mutate(sig_anova = dplyr::if_else(q.val_anova < 0.05, "sig","n.s."))%>%
+  dplyr::select(-data)
+
+
+
+Protein_final_results<-left_join(Protein_results,prot_norm_data_cond,by="ProtID" )%>%
+  left_join(.,prot_norm_data_reps_tidy_anova, by="ProtID")%>%
+  left_join(.,prot_norm_data_reps,by="ProtID" )%>%
+  tidyr::separate(ProtID,into=c("Reference", "Gene.Symbol","Annotation"),sep="__X__")
+
+
+write.csv(Protein_final_results, paste(path,"Proteome_StatResults_",tissue,".csv"))
+
+```
+
+### Generate final phospho table
+
+
+```{r}
+
+exp_design2_phos<-exp_design_phos%>%
+    dplyr::filter(Condition != "Empty")%>%
+    dplyr::mutate(BioReplicate = paste(Condition,Replicate,sep="_"))%>%
+    dplyr::select(BioReplicate, priority)
+  
+phos_norm_data_reps_tidy<-summarized$PTM$ProteinLevelData%>%
+  dplyr::rename(ProtID = Protein)%>%
+  dplyr::ungroup()%>%
+  dplyr::left_join(.,exp_design2_phos, by="BioReplicate")
+  
+phos_norm_data_reps_tidy$BioReplicate<-reorder(phos_norm_data_reps_tidy$BioReplicate,phos_norm_data_reps_tidy$priority,min)
+phos_norm_data_reps_tidy$Condition<-reorder(phos_norm_data_reps_tidy$Condition,phos_norm_data_reps_tidy$priority,min)
+  
+phos_norm_data_reps_tidy<-phos_norm_data_reps_tidy%>% 
+  dplyr::ungroup()%>%
+  dplyr::select(-priority)%>%
+  dplyr::select(ProtID,  Condition,BioReplicate, Abundance)%>%
+  dplyr::group_by(ProtID,Condition,  BioReplicate)%>%
+  dplyr::summarise(Abundance = mean(Abundance,na.rm=TRUE))%>%
+  dplyr::mutate(Abundance = replace_na(Abundance, 0))
+
+
+phos_norm_data_reps<-phos_norm_data_reps_tidy%>%
+    dplyr::ungroup()%>%
+    dplyr::group_by(ProtID,  BioReplicate, Abundance)%>%
+    dplyr::select(-Condition)%>%
+    tidyr::spread(BioReplicate, Abundance)%>%
+    dplyr::ungroup()
+phos_norm_data_reps[is.na(phos_norm_data_reps)] <- 0
+
+
+phos_norm_data_cond<-phos_norm_data_reps_tidy%>%
+    # dplyr::rename(ProtID = Protein)%>%
+    dplyr::ungroup()%>%
+    dplyr::select(ProtID,  BioReplicate, Condition, Abundance)%>%
+    dplyr::filter(Abundance>-1)%>%
+    dplyr::group_by(ProtID,Condition,  BioReplicate)%>%
+    dplyr::summarise(Abundance = mean(Abundance))%>%
+    dplyr::ungroup()%>%
+    dplyr::group_by(ProtID,Condition)%>%
+    dplyr::summarise(Abundance= mean(Abundance))%>%
+    tidyr::spread(Condition, Abundance)%>%
+    dplyr::ungroup()
+  
+phos_norm_data_cond[is.na(phos_norm_data_cond)] <- 0
+
+
+
+
+phos_norm_data_reps_tidy_anova<-phos_norm_data_reps_tidy%>%
+  dplyr::group_by(ProtID)%>%
+  tidyr::nest()%>%
+  dplyr::mutate(p.val_anova = data %>% map_dbl(anova_test))
+
+phos_norm_data_reps_tidy_anova$q.val_anova <- p.adjust(phos_norm_data_reps_tidy_anova$p.val_anova, method="fdr")
+
+phos_norm_data_reps_tidy_anova<-phos_norm_data_reps_tidy_anova%>%
+  dplyr::mutate(sig_anova = dplyr::if_else(q.val_anova < 0.05, "sig","n.s."))%>%
+  dplyr::select(-data)
+
+
+
+PTM_final_results<-left_join(PTM_results,phos_norm_data_cond,by="ProtID" )%>%
+  left_join(.,phos_norm_data_reps_tidy_anova, by="ProtID")%>%
+  left_join(.,phos_norm_data_reps,by="ProtID" )%>%
+  tidyr::separate(ProtID,into=c("Reference", "Gene.Symbol","Annotation"),sep="__X__")%>%
+  tidyr::separate(Annotation, into=c("Annotation","PhosphoSite"),sep="_")
+
+write.csv(PTM_final_results, paste(path,"Phospho_StatResults_",tissue,".csv"))
+```
+
+
+
+
+
