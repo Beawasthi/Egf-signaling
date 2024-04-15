@@ -85,7 +85,7 @@ get_tissue_ERK_dependent <- function(tissue){
 
 scale_data <- function(df){
   scaled <- df  %>%
-    select(-c("heart_4.28", "lung_4.28", "kidney_4.28", "liver_4.28")) %>% # filter out unrelated sample
+   # select(-c("heart_4.28", "lung_4.28", "kidney_4.28", "liver_4.28")) %>% # filter out unrelated sample
     mutate_at(vars(heart_4.2:heart_4.26, heart_4.30), ~.x/rowSums(select(df, heart_4.2:heart_4.26, heart_4.30))*100) %>%
     mutate_at(vars(lung_4.2:lung_4.26, lung_4.30), ~.x/rowSums(select(df, lung_4.2:lung_4.26, lung_4.30))*100) %>%
     mutate_at(vars(kidney_4.2:kidney_4.26, kidney_4.30), ~.x/rowSums(select(df, kidney_4.2:kidney_4.26, kidney_4.30))*100) %>%
